@@ -1,0 +1,23 @@
+{
+  "name": "vitality",
+  "version": "1.0.0",
+  "description": "Vitality — A minimalist daily vitamin and habit tracker built with React (Vite) + Tailwind CSS + Lucide React, and a Pure PHP REST API (PDO) + MySQL database.",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "server": "php -S localhost:8000"
+  },
+  "keywords": [
+    "vitamins",
+    "habits",
+    "tracker",
+    "react",
+    "php",
+    "mysql",
+    "tailwind"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+
