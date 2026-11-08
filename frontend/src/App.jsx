@@ -4,6 +4,7 @@ import StatsCard from './components/StatsCard';
 import AddVitaminForm from './components/AddVitaminForm';
 import DailyTrackerList from './components/DailyTrackerList';
 import NotificationToast from './components/NotificationToast';
+import InstallBanner from './components/InstallBanner';
 import { api } from './services/api';
 import { getDeviceId, setDeviceId } from './lib/deviceId';
 import { notifications } from './lib/notifications';
@@ -337,6 +338,9 @@ export default function App() {
 
       {/* Toast Notification Container */}
       <NotificationToast toast={toast} onClose={() => setToast(null)} />
+
+      {/* PWA Install Banner */}
+      <InstallBanner />
     </div>
   );
 }

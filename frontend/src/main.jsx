@@ -43,3 +43,18 @@ try {
     </div>
   `;
 }
+
+// Register PWA Service Worker
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) => {
+        console.log('[VitaLity PWA] ServiceWorker registered with scope:', registration.scope);
+      })
+      .catch((error) => {
+        console.warn('[VitaLity PWA] ServiceWorker registration failed:', error);
+      });
+  });
+}
+
