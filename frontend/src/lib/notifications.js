@@ -8,7 +8,11 @@ export const notifications = {
    * @returns {boolean}
    */
   isSupported() {
-    return typeof window !== 'undefined' && 'Notification' in window;
+    try {
+      return typeof window !== 'undefined' && 'Notification' in window && window.isSecureContext;
+    } catch {
+      return false;
+    }
   },
 
   /**
@@ -17,7 +21,11 @@ export const notifications = {
    */
   getPermission() {
     if (!this.isSupported()) return 'unsupported';
-    return Notification.permission;
+    try {
+      return Notification?.permission || 'default';
+    } catch {
+      return 'unsupported';
+    }
   },
 
   /**
@@ -40,17 +48,18 @@ export const notifications = {
    * @param {string} [time]
    */
   notify(vitaminName, time = '') {
-    if (!this.isSupported() || Notification.permission !== 'granted') return;
+    if (!this.isSupported()) return;
 
     try {
-      new Notification('Vitality Reminder 💊', {
-        body: `Time to take: ${vitaminName}${time ? ` (Scheduled for ${time})` : ''}`,
-        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2310b981"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>',
-        tag: `vitamin-${vitaminName}-${Date.now()}`,
-      });
+      if (Notification?.permission === 'granted') {
+        new Notification('Vitality Reminder 💊', {
+          body: `Time to take: ${vitaminName}${time ? ` (Scheduled for ${time})` : ''}`,
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2310b981"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>',
+          tag: `vitamin-${vitaminName}-${Date.now()}`,
+        });
+      }
     } catch (err) {
-      console.warn('Could not display notification:', err);
+      console.warn('[Notification] Could not display notification:', err);
     }
   },
 };
-

@@ -6,7 +6,7 @@
   "description": "Vitality — A minimalist daily vitamin and habit tracker built with React (Vite) + Tailwind CSS + Lucide React, and Supabase.",
   "scripts": {
     "dev": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run build",
+    "build": "npm --prefix frontend run build && node -e \"const fs=require('fs'); fs.cpSync('frontend/dist', 'dist', {recursive: true});\"",
     "preview": "npm --prefix frontend run preview"
   },
   "dependencies": {
