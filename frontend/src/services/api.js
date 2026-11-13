@@ -1,9 +1,10 @@
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
+import { sortVitamins } from '../lib/dateUtils';
 
 export const api = {
   /**
-   * Fetch all vitamins for the current device ordered by date and time
+   * Fetch all vitamins for the current device ordered by date (descending) and time
    */
   async getVitamins() {
     const currentDeviceId = getDeviceId();
@@ -12,18 +13,20 @@ export const api = {
       .from('vitamins')
       .select('*')
       .eq('device_id', currentDeviceId)
-      .order('date', { ascending: true })
+      .order('date', { ascending: false })
       .order('time', { ascending: true });
 
     if (error) {
       throw new Error(error.message || 'Failed to fetch vitamins from Supabase.');
     }
 
-    return (data || []).map((item) => ({
+    const formatted = (data || []).map((item) => ({
       ...item,
       time: item.time ? item.time.slice(0, 5) : '',
       full_time: item.time,
     }));
+
+    return sortVitamins(formatted);
   },
 
   /**

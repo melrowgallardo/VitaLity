@@ -1,6 +1,24 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import VitaminItem from './VitaminItem';
-import { Search, Filter, CheckCircle2, ListFilter, AlertCircle, RefreshCw, CalendarDays, Download } from 'lucide-react';
+import {
+  Search,
+  Filter,
+  CheckCircle2,
+  ListFilter,
+  AlertCircle,
+  RefreshCw,
+  CalendarDays,
+  Download,
+  Calendar,
+  Sparkles,
+} from 'lucide-react';
+import {
+  getLocalTodayStr,
+  getLocalYesterdayStr,
+  compareVitamins,
+  getDateSortTier,
+  getDateSectionInfo,
+} from '../lib/dateUtils';
 
 export default function DailyTrackerList({
   vitamins = [],
@@ -14,11 +32,27 @@ export default function DailyTrackerList({
   const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'today', 'pending', 'completed'
   const [searchQuery, setSearchQuery] = useState('');
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Track today and yesterday in user's local timezone
+  const [todayStr, setTodayStr] = useState(() => getLocalTodayStr());
+  const [yesterdayStr, setYesterdayStr] = useState(() => getLocalYesterdayStr());
+
+  // Check every 30 seconds for midnight roll-over in the user's local timezone
+  useEffect(() => {
+    const checkMidnight = () => {
+      const currentLocalToday = getLocalTodayStr();
+      if (currentLocalToday !== todayStr) {
+        setTodayStr(currentLocalToday);
+        setYesterdayStr(getLocalYesterdayStr());
+      }
+    };
+
+    const interval = setInterval(checkMidnight, 30000);
+    return () => clearInterval(interval);
+  }, [todayStr]);
 
   // Filter and search logic
   const filteredVitamins = useMemo(() => {
-    return vitamins.filter((item) => {
+    const list = vitamins.filter((item) => {
       // Search matching
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
       if (!matchesSearch) return false;
@@ -36,14 +70,79 @@ export default function DailyTrackerList({
 
       return true; // 'all'
     });
-  }, [vitamins, searchQuery, activeFilter, todayStr]);
+
+    // Sort entries: Today first, Yesterday second, older dates descending, then chronological by time
+    return [...list].sort((a, b) => compareVitamins(a, b, todayStr, yesterdayStr));
+  }, [vitamins, searchQuery, activeFilter, todayStr, yesterdayStr]);
+
+  // Group entries by date for the schedule view
+  const dateGroups = useMemo(() => {
+    if (filteredVitamins.length === 0 && !(!searchQuery.trim() && (activeFilter === 'all' || activeFilter === 'today') && vitamins.length > 0)) {
+      return [];
+    }
+
+    const groupsMap = new Map();
+
+    // Ensure Today is anchored at the top when viewing 'all' or 'today' and not searching
+    const shouldAnchorToday = !searchQuery.trim() && (activeFilter === 'all' || activeFilter === 'today') && vitamins.length > 0;
+    if (shouldAnchorToday) {
+      groupsMap.set(todayStr, []);
+    }
+
+    // Populate items into groups
+    filteredVitamins.forEach((item) => {
+      const dateKey = item.date || todayStr;
+      if (!groupsMap.has(dateKey)) {
+        groupsMap.set(dateKey, []);
+      }
+      groupsMap.get(dateKey).push(item);
+    });
+
+    // Convert map to array and compute metadata
+    const groups = Array.from(groupsMap.entries()).map(([date, items]) => ({
+      date,
+      items,
+      info: getDateSectionInfo(date, todayStr, yesterdayStr),
+    }));
+
+    // Sort date groups:
+    // 1. "Today" always first at the top
+    // 2. "Yesterday" immediately below
+    // 3. Older dates in descending order (newest to oldest)
+    // 4. Future dates (if any)
+    groups.sort((a, b) => {
+      const tierA = getDateSortTier(a.date, todayStr, yesterdayStr);
+      const tierB = getDateSortTier(b.date, todayStr, yesterdayStr);
+
+      if (tierA !== tierB) {
+        return tierA - tierB;
+      }
+
+      if (tierA === 3) {
+        // Older dates: newest first (e.g. 2026-11-11 before 2026-11-10)
+        return b.date.localeCompare(a.date);
+      }
+
+      if (tierA === 4) {
+        // Future dates: nearest first
+        return a.date.localeCompare(b.date);
+      }
+
+      return 0;
+    });
+
+    return groups;
+  }, [filteredVitamins, todayStr, yesterdayStr, activeFilter, searchQuery, vitamins.length]);
 
   // Export to CSV
   const handleExportCSV = () => {
     if (vitamins.length === 0) return;
 
+    // Use sorted items for CSV export
+    const sorted = [...vitamins].sort((a, b) => compareVitamins(a, b, todayStr, yesterdayStr));
+
     const headers = ['ID', 'Name', 'Date', 'Time', 'Completed'];
-    const rows = vitamins.map((v) => [
+    const rows = sorted.map((v) => [
       v.id,
       `"${v.name.replace(/"/g, '""')}"`,
       v.date,
@@ -63,7 +162,7 @@ export default function DailyTrackerList({
     URL.revokeObjectURL(url);
   };
 
-  // Counters for tabs
+  // Counters for tabs using local today
   const countAll = vitamins.length;
   const countToday = vitamins.filter((v) => v.date === todayStr).length;
   const countPending = vitamins.filter((v) => !v.is_completed).length;
@@ -112,7 +211,7 @@ export default function DailyTrackerList({
       </div>
 
       {/* Filter Tabs and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-5">
         {/* Filter Pills */}
         <div className="flex items-center gap-1 bg-stone-50 p-1 rounded-xl border border-stone-200/70 overflow-x-auto">
           <button
@@ -131,7 +230,7 @@ export default function DailyTrackerList({
             onClick={() => setActiveFilter('today')}
             className={`text-xs px-3 py-1 rounded-lg font-medium whitespace-nowrap transition-all ${
               activeFilter === 'today'
-                ? 'bg-white text-stone-900 shadow-xs'
+                ? 'bg-white text-emerald-800 shadow-xs'
                 : 'text-stone-500 hover:text-stone-800'
             }`}
           >
@@ -214,7 +313,7 @@ export default function DailyTrackerList({
       )}
 
       {/* Empty State */}
-      {!isLoading && filteredVitamins.length === 0 && (
+      {!isLoading && filteredVitamins.length === 0 && dateGroups.length === 0 && (
         <div className="text-center py-12 px-4 border border-dashed border-stone-200 rounded-2xl bg-stone-50/40">
           <div className="w-12 h-12 rounded-2xl bg-stone-100 text-stone-400 mx-auto flex items-center justify-center mb-3">
             <CalendarDays className="w-6 h-6" />
@@ -227,22 +326,74 @@ export default function DailyTrackerList({
               ? 'No completed items yet. Check off items as you take them!'
               : activeFilter === 'pending'
               ? 'All caught up! No pending items remaining.'
+              : activeFilter === 'today'
+              ? 'No vitamins scheduled for today. Use the form above to add one!'
               : 'Add your first vitamin or supplement above to begin tracking.'}
           </p>
         </div>
       )}
 
-      {/* List of Items */}
-      <div className="space-y-2.5">
-        {filteredVitamins.map((item) => (
-          <VitaminItem
-            key={item.id}
-            vitamin={item}
-            onToggle={onToggle}
-            onDelete={onDelete}
-            onUpdate={onUpdate}
-          />
-        ))}
+      {/* Date Groups (Today first, Yesterday second, older dates descending) */}
+      <div className="space-y-6">
+        {dateGroups.map((group) => {
+          const isToday = group.date === todayStr;
+          const isYesterday = group.date === yesterdayStr;
+          const completedCount = group.items.filter((i) => i.is_completed).length;
+          const totalCount = group.items.length;
+
+          return (
+            <section key={group.date} className="space-y-2.5">
+              {/* Date Group Header */}
+              <div className="flex items-center justify-between pb-2 border-b border-stone-100">
+                <div className="flex items-center gap-2">
+                  {isToday ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                      Today
+                    </span>
+                  ) : isYesterday ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200">
+                      Yesterday
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold text-stone-800">
+                      {group.info.title}
+                    </span>
+                  )}
+                  <span className="text-xs text-stone-400 font-medium">
+                    {group.info.formattedDate}
+                  </span>
+                </div>
+
+                {totalCount > 0 ? (
+                  <span className="text-[11px] font-medium text-stone-400">
+                    {completedCount}/{totalCount} completed
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Items in this date group */}
+              <div className="space-y-2.5">
+                {group.items.length > 0 ? (
+                  group.items.map((item) => (
+                    <VitaminItem
+                      key={item.id}
+                      vitamin={item}
+                      onToggle={onToggle}
+                      onDelete={onDelete}
+                      onUpdate={onUpdate}
+                    />
+                  ))
+                ) : (
+                  /* Empty state for Today when other dates exist */
+                  <div className="text-xs text-stone-400 py-3.5 px-4 rounded-xl border border-dashed border-stone-200 bg-stone-50/60 text-center">
+                    No vitamins scheduled for today yet. Use the form above to add today's routine.
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })}
       </div>
     </div>
   );

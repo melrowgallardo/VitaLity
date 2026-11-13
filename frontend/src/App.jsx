@@ -8,6 +8,7 @@ import InstallBanner from './components/InstallBanner';
 import { api } from './services/api';
 import { getDeviceId, setDeviceId } from './lib/deviceId';
 import { notifications } from './lib/notifications';
+import { sortVitamins, getLocalTodayStr } from './lib/dateUtils';
 import { Heart, Cloud, Smartphone, Copy, Check, X, KeyRound } from 'lucide-react';
 
 export default function App() {
@@ -28,7 +29,7 @@ export default function App() {
     setError(null);
     try {
       const data = await api.getVitamins();
-      setVitamins(data);
+      setVitamins(sortVitamins(data));
     } catch (err) {
       console.error('Supabase fetch error:', err);
       const errMsg = err.message || 'Unable to fetch records from Supabase.';
@@ -66,7 +67,7 @@ export default function App() {
 
     const checkInterval = setInterval(() => {
       const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
+      const todayStr = getLocalTodayStr(now);
       const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(
         now.getMinutes()
       ).padStart(2, '0')}`;
@@ -94,7 +95,7 @@ export default function App() {
     setIsSubmitting(true);
     try {
       const created = await api.addVitamin(newVitamin);
-      setVitamins((prev) => [...prev, created]);
+      setVitamins((prev) => sortVitamins([...prev, created]));
 
       setToast({
         type: 'success',
@@ -151,7 +152,7 @@ export default function App() {
     try {
       const updated = await api.updateVitamin(id, updates);
       setVitamins((prev) =>
-        prev.map((v) => (v.id === id ? { ...v, ...updated } : v))
+        sortVitamins(prev.map((v) => (v.id === id ? { ...v, ...updated } : v)))
       );
       setToast({
         type: 'success',

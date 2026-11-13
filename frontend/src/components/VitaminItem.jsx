@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
 import { Check, Trash2, Clock, Calendar, Pencil, X, Loader2 } from 'lucide-react';
+import {
+  getLocalTodayStr,
+  getLocalYesterdayStr,
+  getLocalTomorrowStr,
+  parseLocalDate,
+} from '../lib/dateUtils';
 
 export default function VitaminItem({ vitamin, onToggle, onDelete, onUpdate }) {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -24,18 +30,18 @@ export default function VitaminItem({ vitamin, onToggle, onDelete, onUpdate }) {
     return `${formattedHours}:${minutes} ${ampm}`;
   };
 
-  // Determine date badge (Today, Yesterday, Tomorrow, or formatted date)
+  // Determine date badge (Today, Yesterday, Tomorrow, or formatted date) in local timezone
   const getDateLabel = (dateStr) => {
     if (!dateStr) return '';
-    const target = new Date(dateStr + 'T00:00:00');
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getLocalTodayStr();
+    const yesterday = getLocalYesterdayStr();
+    const tomorrow = getLocalTomorrowStr();
 
-    const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Tomorrow';
-    if (diffDays === -1) return 'Yesterday';
+    if (dateStr === today) return 'Today';
+    if (dateStr === yesterday) return 'Yesterday';
+    if (dateStr === tomorrow) return 'Tomorrow';
 
+    const target = parseLocalDate(dateStr);
     return target.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 

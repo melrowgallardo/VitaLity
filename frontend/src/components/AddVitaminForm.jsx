@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Clock, Calendar, Pill, Sparkles, Loader2 } from 'lucide-react';
+import { getLocalTodayStr } from '../lib/dateUtils';
 
 const QUICK_SUGGESTIONS = [
   'Vitamin D3',
@@ -21,7 +22,7 @@ const TIME_PRESETS = [
 
 export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
   // Today's date in local YYYY-MM-DD
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalTodayStr();
   
   // Current time formatted as HH:MM
   const now = new Date();
