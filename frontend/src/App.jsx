@@ -90,17 +90,25 @@ export default function App() {
     return () => clearInterval(checkInterval);
   }, [vitamins]);
 
-  // Insert new vitamin into Supabase
-  const handleAddVitamin = async (newVitamin) => {
+  // Insert new vitamin(s) into Supabase (single or bulk)
+  const handleAddVitamin = async (newVitaminOrRecords) => {
     setIsSubmitting(true);
     try {
-      const created = await api.addVitamin(newVitamin);
-      setVitamins((prev) => sortVitamins([...prev, created]));
+      const created = await api.addVitamin(newVitaminOrRecords);
+      const createdList = Array.isArray(created) ? created : [created];
+
+      setVitamins((prev) => sortVitamins([...prev, ...createdList]));
+
+      const count = createdList.length;
+      const firstName = createdList[0]?.name || 'Vitamin';
 
       setToast({
         type: 'success',
-        title: 'Vitamin Scheduled',
-        message: `"${created.name}" was added to your schedule.`,
+        title: count > 1 ? 'Routine Scheduled' : 'Vitamin Scheduled',
+        message:
+          count > 1
+            ? `"${firstName}" scheduled for ${count} consecutive days.`
+            : `"${firstName}" was added to your schedule.`,
       });
       setError(null);
     } catch (err) {

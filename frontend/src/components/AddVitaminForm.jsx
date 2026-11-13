@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Clock, Calendar, Pill, Sparkles, Loader2 } from 'lucide-react';
-import { getLocalTodayStr } from '../lib/dateUtils';
+import { Plus, Clock, Calendar, Pill, Sparkles, Loader2, CalendarRange } from 'lucide-react';
+import { getLocalTodayStr, parseLocalDate } from '../lib/dateUtils';
 
 const QUICK_SUGGESTIONS = [
   'Vitamin D3',
@@ -20,10 +20,17 @@ const TIME_PRESETS = [
   { label: 'Bedtime', time: '21:30' },
 ];
 
+const DURATION_PRESETS = [
+  { label: '1 Day', days: 1 },
+  { label: '7 Days', days: 7 },
+  { label: '14 Days', days: 14 },
+  { label: '1 Month (30 Days)', days: 30 },
+];
+
 export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
   // Today's date in local YYYY-MM-DD
   const today = getLocalTodayStr();
-  
+
   // Current time formatted as HH:MM
   const now = new Date();
   const defaultTime = `${String(now.getHours()).padStart(2, '0')}:${String(
@@ -33,6 +40,8 @@ export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
   const [name, setName] = useState('');
   const [date, setDate] = useState(today);
   const [time, setTime] = useState(defaultTime);
+  const [duration, setDuration] = useState(1);
+  const [customDays, setCustomDays] = useState('');
   const [error, setError] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -40,12 +49,13 @@ export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
     e.preventDefault();
     setError('');
 
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setError('Please enter a vitamin or habit name.');
       return;
     }
     if (!date) {
-      setError('Please select a scheduled date.');
+      setError('Please select a scheduled start date.');
       return;
     }
     if (!time) {
@@ -53,16 +63,31 @@ export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
       return;
     }
 
-    try {
-      await onAdd({
-        name: name.trim(),
-        date,
+    const numDays = Math.max(1, Math.min(90, parseInt(duration, 10) || 1));
+
+    // Generate consecutive schedule records starting from selected date
+    const records = [];
+    const baseDate = parseLocalDate(date);
+
+    for (let i = 0; i < numDays; i++) {
+      const targetDate = new Date(baseDate);
+      targetDate.setDate(targetDate.getDate() + i);
+      records.push({
+        name: trimmedName,
+        date: getLocalTodayStr(targetDate),
         time,
       });
+    }
 
-      // Reset form upon successful addition
+    try {
+      await onAdd(records);
+
+      // Reset form and duration back to 1 Day upon successful addition
       setName('');
       setTime(defaultTime);
+      setDate(getLocalTodayStr());
+      setDuration(1);
+      setCustomDays('');
       setIsExpanded(false);
     } catch (err) {
       setError(err.message || 'Failed to add entry. Please try again.');
@@ -72,6 +97,18 @@ export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
   const handleQuickAdd = (suggestion) => {
     setName(suggestion);
     setIsExpanded(true);
+  };
+
+  const handleCustomDaysChange = (e) => {
+    const val = e.target.value;
+    setCustomDays(val);
+
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && parsed >= 1) {
+      setDuration(Math.min(90, parsed));
+    } else if (val === '') {
+      setDuration(1);
+    }
   };
 
   return (
@@ -150,7 +187,9 @@ export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
 
           {/* Date (Defaults to Today) */}
           <div className="sm:col-span-3">
-            <label className="block text-xs font-medium text-stone-500 mb-1">Date</label>
+            <label className="block text-xs font-medium text-stone-500 mb-1">
+              {duration > 1 ? 'Start Date' : 'Date'}
+            </label>
             <div className="relative">
               <Calendar className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -179,10 +218,14 @@ export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
           </div>
         </div>
 
-        {/* Quick Time Preset Buttons & Submit Button */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+        {/* Presets: Time Presets & Duration Selector */}
+        <div className="space-y-2.5 pt-2 border-t border-stone-100">
+          {/* Time Presets Row */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-medium text-stone-400 mr-1">Time Presets:</span>
+            <span className="text-[11px] font-medium text-stone-400 mr-1 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-stone-400" />
+              Time Presets:
+            </span>
             {TIME_PRESETS.map((p) => (
               <button
                 key={p.label}
@@ -190,13 +233,78 @@ export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
                 onClick={() => setTime(p.time)}
                 className={`text-xs px-2 py-0.5 rounded-md border font-normal transition-colors ${
                   time === p.time
-                    ? 'bg-stone-800 text-white border-stone-800'
-                    : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300'
+                    ? 'bg-stone-800 text-white border-stone-800 font-medium'
+                    : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300 hover:bg-stone-50'
                 }`}
               >
                 {p.label}
               </button>
             ))}
+          </div>
+
+          {/* Duration Selector Row */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-medium text-stone-400 mr-1 flex items-center gap-1">
+              <CalendarRange className="w-3 h-3 text-stone-400" />
+              Duration:
+            </span>
+
+            {/* Quick Preset Buttons */}
+            {DURATION_PRESETS.map((p) => {
+              const isSelected = duration === p.days && !customDays;
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => {
+                    setDuration(p.days);
+                    setCustomDays('');
+                  }}
+                  className={`text-xs px-2.5 py-0.5 rounded-md border transition-all ${
+                    isSelected
+                      ? 'bg-emerald-600 text-white border-emerald-600 font-medium shadow-xs'
+                      : 'bg-white text-stone-600 border-stone-200 hover:border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+
+            {/* Custom Days Input */}
+            <div className="flex items-center gap-1 pl-1">
+              <span className="text-[11px] text-stone-400">Custom:</span>
+              <input
+                type="number"
+                min="1"
+                max="90"
+                placeholder="Days"
+                value={customDays}
+                onChange={handleCustomDaysChange}
+                className={`w-14 px-2 py-0.5 text-xs text-center border rounded-md placeholder-stone-300 focus:outline-none transition-all ${
+                  customDays
+                    ? 'bg-emerald-50 border-emerald-500 text-emerald-900 font-semibold'
+                    : 'bg-stone-50/60 border-stone-200 text-stone-700 focus:border-emerald-500 focus:bg-white'
+                }`}
+                title="Custom duration in days (1 to 90)"
+              />
+              <span className="text-[11px] text-stone-400">days</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Row: Summary & Submit Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+          {/* Summary Hint */}
+          <div className="text-xs text-stone-400">
+            {duration > 1 ? (
+              <span className="text-emerald-700 font-medium flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                Scheduling for {duration} consecutive days
+              </span>
+            ) : (
+              <span>Single day reminder</span>
+            )}
           </div>
 
           <button
@@ -207,12 +315,14 @@ export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Saving...</span>
+                <span>Scheduling...</span>
               </>
             ) : (
               <>
                 <Plus className="w-4 h-4" />
-                <span>Add to Schedule</span>
+                <span>
+                  {duration > 1 ? `Schedule ${duration} Days` : 'Add to Schedule'}
+                </span>
               </>
             )}
           </button>
@@ -221,4 +331,3 @@ export default function AddVitaminForm({ onAdd, isSubmitting = false }) {
     </div>
   );
 }
-

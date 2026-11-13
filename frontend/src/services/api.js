@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
-import { sortVitamins } from '../lib/dateUtils';
+import { sortVitamins, parseLocalDate, getLocalTodayStr } from '../lib/dateUtils';
 
 export const api = {
   /**
@@ -30,36 +30,82 @@ export const api = {
   },
 
   /**
-   * Insert new vitamin record for the current device
-   * @param {{ name: string, date: string, time: string }} payload
+   * Insert one or multiple vitamin records for the current device
+   * Supports single record, bulk array, or { name, date, time, duration }
+   * @param {{ name: string, date: string, time: string, duration?: number } | Array<{ name: string, date: string, time: string }>} payload
    */
-  async addVitamin({ name, date, time }) {
+  async addVitamin(payload) {
     const currentDeviceId = getDeviceId();
-    const formattedTime = time.length === 5 ? `${time}:00` : time;
+    let recordsToInsert = [];
 
-    const record = {
-      name,
-      date,
-      time: formattedTime,
-      is_completed: false,
-      device_id: currentDeviceId,
-    };
+    if (Array.isArray(payload)) {
+      recordsToInsert = payload.map((item) => ({
+        name: item.name,
+        date: item.date,
+        time: item.time && item.time.length === 5 ? `${item.time}:00` : item.time,
+        is_completed: false,
+        device_id: currentDeviceId,
+      }));
+    } else if (payload.records && Array.isArray(payload.records)) {
+      recordsToInsert = payload.records.map((item) => ({
+        name: item.name,
+        date: item.date,
+        time: item.time && item.time.length === 5 ? `${item.time}:00` : item.time,
+        is_completed: false,
+        device_id: currentDeviceId,
+      }));
+    } else if (payload.duration && payload.duration > 1) {
+      const baseDate = parseLocalDate(payload.date);
+      for (let i = 0; i < payload.duration; i++) {
+        const d = new Date(baseDate);
+        d.setDate(d.getDate() + i);
+        recordsToInsert.push({
+          name: payload.name,
+          date: getLocalTodayStr(d),
+          time: payload.time && payload.time.length === 5 ? `${payload.time}:00` : payload.time,
+          is_completed: false,
+          device_id: currentDeviceId,
+        });
+      }
+    } else {
+      const formattedTime = payload.time && payload.time.length === 5 ? `${payload.time}:00` : payload.time;
+      recordsToInsert = [
+        {
+          name: payload.name,
+          date: payload.date,
+          time: formattedTime,
+          is_completed: false,
+          device_id: currentDeviceId,
+        },
+      ];
+    }
 
     const { data, error } = await supabase
       .from('vitamins')
-      .insert([record])
-      .select()
-      .single();
+      .insert(recordsToInsert)
+      .select();
 
     if (error) {
-      throw new Error(error.message || 'Failed to insert vitamin into Supabase.');
+      throw new Error(error.message || 'Failed to insert vitamin(s) into Supabase.');
     }
 
-    return {
-      ...data,
-      time: data.time ? data.time.slice(0, 5) : '',
-      full_time: data.time,
-    };
+    const formattedList = (data || []).map((item) => ({
+      ...item,
+      time: item.time ? item.time.slice(0, 5) : '',
+      full_time: item.time,
+    }));
+
+    return formattedList.length === 1 && !Array.isArray(payload) && (!payload.duration || payload.duration === 1)
+      ? formattedList[0]
+      : formattedList;
+  },
+
+  /**
+   * Bulk insert an array of vitamin records at once
+   * @param {Array<{ name: string, date: string, time: string }>} records
+   */
+  async addVitamins(records) {
+    return this.addVitamin(records);
   },
 
   /**
